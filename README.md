@@ -1,0 +1,160 @@
+# bumpcheck
+
+Prove whether a dependency bump breaks the code that imports it.
+
+Dependabot or Renovate opens a pull request bumping `zod` from 3 to 4. bumpcheck
+reads the type declarations of both versions and your source, then reports
+three kinds of facts, each with a file and line:
+
+- a symbol you import was removed,
+- a call you make no longer typechecks against the new declarations,
+- a symbol you import changed, and whether your uses still typecheck.
+
+Anything it cannot prove is listed as "could not be checked". It never guesses
+and it never says "safe".
+
+```
+$ bumpcheck zod 3.23.8 4.1.12 --repo ./my-app
+
+zod 3.23.8 -> 4.1.12
+You import 3 symbols from zod. 2 breaks in 2 symbols, 1 changed but still typechecks. Behavior not checked.
+
+BREAKS
+  ZodError  Property 'errors' does not exist on type 'ZodError<unknown>'.
+    src/schema.ts:15:25  (TS2339)
+  ZodTypeAny  Property 'typeName' does not exist on type '$ZodTypeDef'.
+    src/schema.ts:21:22  (TS2339)
+```
+
+In the common case the whole output is one line:
+
+```
+You import 5 symbols from axios. None changed. Behavior not checked.
+```
+
+## Install
+
+```
+npm install -g bumpcheck
+```
+
+Requires Node 20 or newer and `npm` on your PATH. The repo you analyze does
+not need `node_modules` installed; bumpcheck fetches both package versions
+into its own cache.
+
+## Use
+
+```
+bumpcheck <package> <from> <to> [--repo <dir>] [--format text|markdown|json]
+```
+
+Exit code is 1 when at least one break is found, 0 otherwise, 2 on error.
+Pass `--no-fail` to always exit 0.
+
+`--format markdown` produces a pull request comment. `--format json` emits the
+full report, documented in [src/types.ts](src/types.ts), for other tools.
+
+## In a pull request
+
+Until the dedicated action ships, this workflow comments on Dependabot and
+Renovate pull requests. It reads the bump from the manifest diff and posts
+one comment per changed package.
+
+```yaml
+name: bumpcheck
+on:
+  pull_request:
+    paths: ['package.json', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock']
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Find bumped packages
+        id: bumps
+        run: |
+          git diff origin/${{ github.base_ref }}...HEAD -- package.json \
+            | node -e '
+              const lines = require("fs").readFileSync(0, "utf8").split("\n");
+              const before = {}, after = {};
+              for (const l of lines) {
+                const m = /^([-+])\s*"([^"]+)":\s*"[\^~]?([^"]+)"/.exec(l);
+                if (m) (m[1] === "-" ? before : after)[m[2]] = m[3];
+              }
+              const out = Object.keys(after).filter(k => before[k]).map(k => `${k} ${before[k]} ${after[k]}`);
+              console.log("list=" + out.join(";"));
+            ' >> "$GITHUB_OUTPUT"
+      - name: Run bumpcheck
+        if: steps.bumps.outputs.list != ''
+        run: |
+          : > comment.md
+          IFS=';' read -ra BUMPS <<< "${{ steps.bumps.outputs.list }}"
+          for b in "${BUMPS[@]}"; do
+            npx bumpcheck $b --format markdown --no-fail >> comment.md
+            echo >> comment.md
+          done
+      - name: Comment
+        if: steps.bumps.outputs.list != ''
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: bumpcheck
+          path: comment.md
+```
+
+## How it works
+
+1. Both versions are installed with `npm install --ignore-scripts` into a
+   per-version cache, so their own dependencies resolve.
+2. Two TypeScript programs are built over your repo, identical except that
+   every import of the package resolves to one version or the other.
+3. Every import of the package is collected: named, default, namespace
+   member access, `require()` destructuring, subpaths, and type-only imports.
+4. Each imported symbol's declaration is tokenized and compared between
+   versions. Comments and formatting do not count.
+5. Type errors are collected in the importing files for both programs. Errors
+   present only with the new version are the breaks. Your pre-existing errors
+   cancel out.
+6. Each break is attributed to an imported symbol by the error message, the
+   import binding in the failing expression, or a type declared under that
+   import. The report says which.
+
+If your repo has a `tsconfig.json`, its options are used, so a break is a
+break under your own settings. Without one, bumpcheck uses strict defaults with
+`checkJs` so plain JavaScript repos are analyzed too.
+
+## What it does not do
+
+- It does not check runtime behavior. A function with the same signature can
+  still behave differently. The footer of every report says so.
+- It does not analyze packages that ship no type declarations. The report says
+  so instead of reporting zero breaks.
+- It does not follow dynamic `import()`, `export * from`, or a namespace
+  passed around as a value. Those appear under "not analyzed".
+- It does not fix anything, read changelogs, or decide whether to merge.
+
+## Status
+
+Early. npm with TypeScript declarations is the only ecosystem. The report
+schema is versioned and will stay backwards compatible within a major.
+
+## Development
+
+```
+npm install
+npm test
+npm run dev -- zod 3.23.8 4.1.12 --repo ../some-app
+```
+
+Tests run offline against fixture packages in `test/fixtures`. Add a case by
+planting a change in `demo-lib-v2` and a use in `consumer`, then asserting the
+exact file and line.
+
+## License
+
+Apache-2.0
