@@ -37,3 +37,21 @@ describe('renderers', () => {
     expect(md.trim().endsWith('</sub>')).toBe(true);
   });
 });
+
+describe('grouping and clips', () => {
+  it('groups breaks with the same cause and collapses their sites', async () => {
+    const report = await analyzeFixture('1.0.0', '2.0.0');
+    // Two fetchThing sites share one cause: main.ts:12 and indirect.ts:6.
+    const text = renderText(report);
+    expect(text).toContain("fetchThing  Property 'name' does not exist on type '{…}'.  TS2339  (2 sites)");
+    const md = renderMarkdown(report);
+    expect(md).toContain('<details><summary>2 sites</summary>');
+  });
+
+  it('shows the region that differs, not identical prefixes', async () => {
+    const report = await analyzeFixture('1.0.0', '2.0.0');
+    const text = renderText(report);
+    expect(text).toContain('before: export declare function greet ( name : string , greeting ? : string ) : string ;');
+    expect(text).toContain('after:  export declare function greet ( name : string , options ? : { greeting : string } ) : string ;');
+  });
+});

@@ -12,6 +12,56 @@ function clip(s: string | undefined): string {
   return one.length > MAX_SIG ? one.slice(0, MAX_SIG - 1) + '…' : one;
 }
 
+/**
+ * Before/after excerpts centered on the first difference, so a change deep
+ * inside a long declaration is visible instead of two identical prefixes.
+ */
+function diffClips(before: string | undefined, after: string | undefined): { before: string; after: string } {
+  const a = (before ?? '').replace(/\n/g, ' ⏎ ');
+  const b = (after ?? '').replace(/\n/g, ' ⏎ ');
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  const start = Math.max(0, i - Math.floor(MAX_SIG / 3));
+  const cut = (s: string) => {
+    const slice = s.slice(start, start + MAX_SIG);
+    return (start > 0 ? '…' : '') + slice + (start + MAX_SIG < s.length ? '…' : '');
+  };
+  return { before: cut(a), after: cut(b) };
+}
+
+interface BreakGroup {
+  symbol: string | undefined;
+  message: string;
+  kind: Break['kind'];
+  code: number;
+  sites: Location[];
+}
+
+/**
+ * One line per distinct cause. 79 "Property 'errors' does not exist" lines
+ * are one fact with 79 sites; the JSON report keeps every site.
+ */
+function groupBreaks(breaks: Break[]): BreakGroup[] {
+  const groups = new Map<string, BreakGroup>();
+  for (const b of breaks) {
+    const message = generalize(b.message);
+    const key = `${b.symbol ?? ''}\u0000${b.code}\u0000${message}`;
+    const g = groups.get(key);
+    if (g) g.sites.push(b.location);
+    else groups.set(key, { symbol: b.symbol, message, kind: b.kind, code: b.code, sites: [b.location] });
+  }
+  return [...groups.values()].sort((x, y) => y.sites.length - x.sites.length);
+}
+
+/** Drops the per-site type arguments so identical causes share a line. */
+function generalize(message: string): string {
+  return message
+    .replace(/<[^<>]*(?:<[^<>]*>[^<>]*)*>/g, '<…>')
+    .replace(/'\{[^']*\}'/g, "'{…}'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function headline(r: Report): string {
   const n = r.summary.importedSymbols;
   const what = n === 1 ? '1 symbol' : `${n} symbols`;
@@ -33,9 +83,13 @@ function headline(r: Report): string {
   return `You import ${what} from ${r.package}. ${tail} Behavior not checked.`;
 }
 
-function breakLine(b: Break): string {
-  const sym = b.symbol ? `${b.symbol}  ` : '';
-  return `  ${sym}${b.message}\n    ${loc(b.location)}  (TS${b.code})`;
+function groupLines(g: BreakGroup, maxSites: number): string[] {
+  const sym = g.symbol ? `${g.symbol}  ` : '';
+  const count = g.sites.length === 1 ? '' : `  (${g.sites.length} sites)`;
+  const lines = [`  ${sym}${g.message}  TS${g.code}${count}`];
+  for (const l of g.sites.slice(0, maxSites)) lines.push(`    ${loc(l)}`);
+  if (g.sites.length > maxSites) lines.push(`    … ${g.sites.length - maxSites} more, see --format json`);
+  return lines;
 }
 
 function section(title: string, items: ImportedSymbol[], out: string[]): void {
@@ -46,9 +100,10 @@ function section(title: string, items: ImportedSymbol[], out: string[]): void {
 }
 
 function symbolLine(s: ImportedSymbol): string {
+  const d = diffClips(s.change?.before, s.change?.after);
   const sig =
     s.status === 'changed' || s.status === 'breaking'
-      ? `\n    before: ${clip(s.change?.before)}\n    after:  ${clip(s.change?.after)}`
+      ? `\n    before: ${d.before}\n    after:  ${d.after}`
       : s.status === 'removed'
         ? `\n    was: ${clip(s.change?.before)}`
         : '';
@@ -65,7 +120,7 @@ export function renderText(r: Report): string {
 
   if (r.breaks.length > 0) {
     out.push('BREAKS');
-    for (const b of r.breaks) out.push(breakLine(b));
+    for (const g of groupBreaks(r.breaks)) out.push(...groupLines(g, 5));
     out.push('');
   }
   section('REMOVED', r.imports.filter((i) => i.status === 'removed'), out);
@@ -101,10 +156,19 @@ export function renderMarkdown(r: Report): string {
   if (r.breaks.length > 0) {
     out.push('**Breaks**');
     out.push('');
-    for (const b of r.breaks) {
-      const sym = b.symbol ? `\`${b.symbol}\` ` : '';
-      out.push(`- ${sym}${b.message}  `);
-      out.push(`  \`${loc(b.location)}\` (TS${b.code})`);
+    for (const g of groupBreaks(r.breaks)) {
+      const sym = g.symbol ? `\`${g.symbol}\` ` : '';
+      if (g.sites.length === 1) {
+        out.push(`- ${sym}${g.message}  `);
+        out.push(`  \`${loc(g.sites[0]!)}\` (TS${g.code})`);
+      } else {
+        out.push(`- ${sym}${g.message} (TS${g.code})  `);
+        out.push(`  <details><summary>${g.sites.length} sites</summary>`);
+        out.push('');
+        for (const l of g.sites) out.push(`  - \`${loc(l)}\``);
+        out.push('');
+        out.push('  </details>');
+      }
     }
     out.push('');
   }
@@ -123,9 +187,10 @@ export function renderMarkdown(r: Report): string {
     out.push('**Changed, see breaks above**');
     out.push('');
     for (const s of breaking) {
+      const d = diffClips(s.change?.before, s.change?.after);
       out.push(`- \`${s.name}\` from \`${s.specifier}\``);
-      out.push(`  - before: \`${clip(s.change?.before)}\``);
-      out.push(`  - after: \`${clip(s.change?.after)}\``);
+      out.push(`  - before: \`${d.before}\``);
+      out.push(`  - after: \`${d.after}\``);
     }
     out.push('');
   }
@@ -134,9 +199,10 @@ export function renderMarkdown(r: Report): string {
     out.push('<details><summary><b>Changed, still typechecks</b> (' + changed.length + ')</summary>');
     out.push('');
     for (const s of changed) {
+      const d = diffClips(s.change?.before, s.change?.after);
       out.push(`- \`${s.name}\` from \`${s.specifier}\``);
-      out.push(`  - before: \`${clip(s.change?.before)}\``);
-      out.push(`  - after: \`${clip(s.change?.after)}\``);
+      out.push(`  - before: \`${d.before}\``);
+      out.push(`  - after: \`${d.after}\``);
       for (const l of s.locations) out.push(`  - \`${loc(l)}\``);
     }
     out.push('');

@@ -42,6 +42,11 @@ Requires Node 20 or newer and `npm` on your PATH. The repo you analyze does
 not need `node_modules` installed; bumpcheck fetches both package versions
 into its own cache.
 
+The command runs against one project root: the directory holding the
+`package.json` that was bumped, analyzed under that directory's
+`tsconfig.json`. Nested packages with their own `tsconfig.json` are not yet
+discovered; run once per package for now.
+
 ## Use
 
 ```
@@ -94,18 +99,32 @@ jobs:
         if: steps.bumps.outputs.list != ''
         run: |
           : > comment.md
+          failed=0
           IFS=';' read -ra BUMPS <<< "${{ steps.bumps.outputs.list }}"
           for b in "${BUMPS[@]}"; do
-            npx bumpcheck $b --format markdown --no-fail >> comment.md
+            npx bumpcheck $b --format markdown --json-out report.json >> comment.md || failed=1
             echo >> comment.md
+            unknown=$(node -p 'const r=require("./report.json"); r.summary.unknown + r.summary.unanalyzed')
+            if [ "$unknown" != "0" ]; then
+              echo "::warning title=bumpcheck::$b: $unknown import(s) could not be checked; see the pull request comment"
+            fi
           done
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+        id: run
       - name: Comment
         if: steps.bumps.outputs.list != ''
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: bumpcheck
           path: comment.md
+      - name: Fail on breaks
+        if: steps.run.outputs.failed == '1'
+        run: exit 1
 ```
+
+The job fails when any package reported a break, after the comment is
+posted. Imports that could not be checked keep the job green and add a
+warning annotation, so a green check means "no proven break", not "safe".
 
 ## How it works
 
