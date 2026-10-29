@@ -44,10 +44,10 @@ other dependencies installed: types from them, such as a tRPC wrapper around
 react-query, are part of what can break. Without `node_modules` the report
 says how many imports could not be resolved.
 
-The command runs against one project root: the directory holding the
-`package.json` that was bumped, analyzed under that directory's
-`tsconfig.json`. Nested packages with their own `tsconfig.json` are not yet
-discovered; run once per package for now.
+Each run analyzes one project root under that directory's `tsconfig.json`.
+`--since` picks the right directory for each bumped `package.json`. Nested
+packages that share a `package.json` but have their own `tsconfig.json` are
+not yet discovered.
 
 ## Use
 
@@ -63,15 +63,17 @@ full report, documented in [src/types.ts](src/types.ts), for other tools.
 
 ## In a pull request
 
-Until the dedicated action ships, this workflow comments on Dependabot and
-Renovate pull requests. It reads the bump from the manifest diff and posts
-one comment per changed package.
+`bumpcheck --since <ref>` finds every direct dependency whose version changed
+between a git ref and HEAD, in any `package.json` in the repo, and checks each
+one in its own directory. That makes the CI step one line, and it works for
+repos with more than one project, such as an API at the root and a web app in
+`web/`.
 
 ```yaml
 name: bumpcheck
 on:
   pull_request:
-    paths: ['package.json', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock']
+    paths: ['**/package.json', '**/package-lock.json']
 permissions:
   contents: read
   pull-requests: write
@@ -84,39 +86,16 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci --ignore-scripts
-      - name: Find bumped packages
-        id: bumps
-        run: |
-          git diff origin/${{ github.base_ref }}...HEAD -- package.json \
-            | node -e '
-              const lines = require("fs").readFileSync(0, "utf8").split("\n");
-              const before = {}, after = {};
-              for (const l of lines) {
-                const m = /^([-+])\s*"([^"]+)":\s*"[\^~]?([^"]+)"/.exec(l);
-                if (m) (m[1] === "-" ? before : after)[m[2]] = m[3];
-              }
-              const out = Object.keys(after).filter(k => before[k]).map(k => `${k} ${before[k]} ${after[k]}`);
-              console.log("list=" + out.join(";"));
-            ' >> "$GITHUB_OUTPUT"
-      - name: Run bumpcheck
-        if: steps.bumps.outputs.list != ''
-        run: |
-          : > comment.md
-          failed=0
-          IFS=';' read -ra BUMPS <<< "${{ steps.bumps.outputs.list }}"
-          for b in "${BUMPS[@]}"; do
-            npx bumpcheck $b --format markdown --json-out report.json >> comment.md || failed=1
-            echo >> comment.md
-            unknown=$(node -p 'const r=require("./report.json"); r.summary.unknown + r.summary.unanalyzed')
-            if [ "$unknown" != "0" ]; then
-              echo "::warning title=bumpcheck::$b: $unknown import(s) could not be checked; see the pull request comment"
-            fi
-          done
-          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+      - name: bumpcheck
         id: run
-      - name: Comment
-        if: steps.bumps.outputs.list != ''
-        uses: marocchino/sticky-pull-request-comment@v2
+        run: |
+          npx bumpcheck --since origin/${{ github.base_ref }} --format markdown --json-out report.json > comment.md \
+            || echo "failed=1" >> "$GITHUB_OUTPUT"
+          unknown=$(node -p 'const r=[].concat(require("./report.json")); r.reduce((n,x)=>n+x.summary.unknown+x.summary.unanalyzed,0)' 2>/dev/null || echo 0)
+          if [ "$unknown" != "0" ]; then
+            echo "::warning title=bumpcheck::$unknown import(s) could not be checked; see the pull request comment"
+          fi
+      - uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: bumpcheck
           path: comment.md
@@ -128,6 +107,7 @@ jobs:
 The job fails when any package reported a break, after the comment is
 posted. Imports that could not be checked keep the job green and add a
 warning annotation, so a green check means "no proven break", not "safe".
+If more than one project needs `npm ci`, add a step per directory.
 
 ## How it works
 
