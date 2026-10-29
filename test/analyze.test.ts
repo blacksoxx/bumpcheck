@@ -84,7 +84,13 @@ describe('demo-lib 1.0.0 -> 2.0.0', () => {
 
   it('reports what it cannot analyze instead of guessing', () => {
     const reasons = report.unanalyzed.map((u) => u.reason).sort();
-    expect(reasons).toEqual(['dynamic import("demo-lib")', 'uses the whole module "demo-lib" as a value']);
+    expect(reasons).toEqual([
+      '1 file imports "demo-lib" but is outside tsconfig.json, so neither tsc nor bumpcheck checks it',
+      'dynamic import("demo-lib")',
+      'uses the whole module "demo-lib" as a value',
+    ]);
+    const outside = report.unanalyzed.find((u) => u.reason.includes('outside tsconfig'));
+    expect(outside?.locations.map((l) => l.file)).toEqual(['scripts-outside.ts']);
   });
 
   it('keeps a consistent summary', () => {

@@ -1,10 +1,11 @@
 import path from 'node:path';
-import { realpathSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import ts from 'typescript';
 import type { ImportedSymbol, Report, Summary, Unanalyzed } from '../types.js';
 import { SCHEMA_VERSION } from '../types.js';
 import type { PackageProvider } from '../registry/provider.js';
-import { buildProgram, isInside, loadRepoConfig } from './program.js';
+import { buildProgram, isInside, loadRepoConfig, walkSources } from './program.js';
+import { relPosix } from './imports.js';
 import { scanImports } from './imports.js';
 import { getModuleExports, namespaceMembers, type ModuleExports } from './exports.js';
 import { collectDiagnostics, diffDiagnostics } from './diagnostics.js';
@@ -83,7 +84,7 @@ export async function analyzeNpm(opts: AnalyzeOptions): Promise<Report> {
   const afterEntries = [...exportsAfter.values()];
   const untyped = afterEntries.length > 0 && afterEntries.every((e) => e.resolved && !e.typed);
 
-  const unanalyzed: Unanalyzed[] = [...scan.unanalyzed];
+  const unanalyzed: Unanalyzed[] = [...scan.unanalyzed, ...config.warnings.map((reason) => ({ reason, locations: [] }))];
   const imports: ImportedSymbol[] = scan.refs.map((ref) => {
     const b = exportsBefore.get(ref.specifier)!;
     const a = exportsAfter.get(ref.specifier)!;
@@ -109,6 +110,21 @@ export async function analyzeNpm(opts: AnalyzeOptions): Promise<Report> {
     if (sigBefore === sigAfter) return { ...ref, status: 'unchanged' };
     return { ...ref, status: 'changed', change: describeChange(sigBefore, sigAfter) };
   });
+
+  // Source files outside the tsconfig's file set are not type checked by
+  // the repo's own tsc either, but a test suite may still load them. Say so
+  // rather than let "nothing imports X" cover files we never looked at.
+  if (config.source === 'tsconfig') {
+    const inProgram = new Set(after.program.getSourceFiles().map((sf) => sf.fileName));
+    const pattern = new RegExp(`(from\\s*|require\\s*\\(\\s*|import\\s*\\(\\s*)['"]${opts.pkg.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(/[^'"]*)?['"]`);
+    const outside = walkSources(repoRoot).filter((f) => !inProgram.has(f) && pattern.test(readFileSync(f, 'utf8')));
+    if (outside.length > 0) {
+      unanalyzed.push({
+        reason: `${outside.length} file${outside.length === 1 ? '' : 's'} import${outside.length === 1 ? 's' : ''} "${opts.pkg}" but ${outside.length === 1 ? 'is' : 'are'} outside tsconfig.json, so neither tsc nor bumpcheck checks ${outside.length === 1 ? 'it' : 'them'}`,
+        locations: outside.map((f) => ({ file: relPosix(repoRoot, f), line: 1, column: 1 })),
+      });
+    }
+  }
 
   if (untyped) {
     unanalyzed.push({

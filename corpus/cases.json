@@ -69,5 +69,45 @@
     "to": "14.0.0",
     "pr": "https://github.com/aws-samples/delivery-routes-optimization-for-logistics/pull/9",
     "truth": "merged with no code changes; apps_infra never imports uuid (dead dependency), apps_web does"
+  },
+  {
+    "id": "zod-esa-mcp-fixed",
+    "repo": "esaio/esa-mcp-server",
+    "base": "c0f562d1af09958f23679fdf47a0d593eb290abd",
+    "pkg": "zod",
+    "from": "3.25.76",
+    "to": "4.6.7",
+    "pr": "https://github.com/esaio/esa-mcp-server/pull/473",
+    "truth": "human fixed src/tools/post-actions.ts before merge (zod 4 made targetTeamName required)"
+  },
+  {
+    "id": "msw-mergent-fixed",
+    "repo": "mergentlabs/mergent-js",
+    "base": "01dc34a0cd57f24042c3806dcc5b7f85fd7e1878",
+    "pkg": "msw",
+    "from": "1.3.3",
+    "to": "2.7.0",
+    "pr": "https://github.com/mergentlabs/mergent-js/pull/515",
+    "truth": "human migrated test/Client.test.ts and test/mocks/server.ts to msw 2 before merge"
+  },
+  {
+    "id": "react-query-gather-kids-fixed",
+    "repo": "tzlukoma/gather-kids",
+    "base": "88d125c96d821f2defd97db3233fe36381659b10",
+    "pkg": "@tanstack/react-query",
+    "from": "4.42.0",
+    "to": "5.102.8",
+    "pr": "https://github.com/tzlukoma/gather-kids/pull/283",
+    "truth": "human migrated 4 src files to the v5 object API before merge"
+  },
+  {
+    "id": "react-query-scene-selector-fixed",
+    "repo": "dmingn/scene-selector",
+    "base": "ecccd55fe1d76aaba6366b2ba569e112516768be",
+    "pkg": "@tanstack/react-query",
+    "from": "4.36.1",
+    "to": "5.90.14",
+    "pr": "https://github.com/dmingn/scene-selector/pull/185",
+    "truth": "human fixed src/renderer/components/FrameImage.tsx before merge (isLoading to isPending)"
   }
 ]

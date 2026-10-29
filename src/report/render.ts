@@ -75,7 +75,8 @@ function headline(r: Report): string {
   const parts: string[] = [];
   if (s.breaks > 0) {
     const affected = s.removed + s.breaking;
-    parts.push(`${s.breaks} break${s.breaks === 1 ? '' : 's'} in ${affected} symbol${affected === 1 ? '' : 's'}`);
+    const where = affected > 0 ? ` in ${affected} symbol${affected === 1 ? '' : 's'}` : '';
+    parts.push(`${s.breaks} break${s.breaks === 1 ? '' : 's'}${where}`);
   }
   if (s.changed > 0) parts.push(`${s.changed} changed but still typecheck${s.changed === 1 ? 's' : ''}`);
   if (s.unknown > 0) parts.push(`${s.unknown} could not be checked`);

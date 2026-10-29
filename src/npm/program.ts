@@ -7,6 +7,8 @@ export interface RepoConfig {
   fileNames: string[];
   /** Where the options came from, for the report's meta. */
   source: 'tsconfig' | 'default';
+  /** Config problems that change what can be proven, e.g. an unresolved `extends`. */
+  warnings: string[];
 }
 
 export interface Target {
@@ -55,7 +57,7 @@ function sanitize(options: ts.CompilerOptions): ts.CompilerOptions {
   return out;
 }
 
-function walkSources(root: string): string[] {
+export function walkSources(root: string): string[] {
   const out: string[] = [];
   const stack = [root];
   while (stack.length) {
@@ -83,7 +85,12 @@ export function loadRepoConfig(repoRoot: string): RepoConfig {
     if (!raw.error) {
       const parsed = ts.parseJsonConfigFileContent(raw.config, ts.sys, path.dirname(configPath), undefined, configPath);
       if (parsed.fileNames.length > 0) {
-        return { options: sanitize(parsed.options), fileNames: parsed.fileNames, source: 'tsconfig' };
+        const warnings = parsed.errors
+          .filter((e) => e.category === ts.DiagnosticCategory.Error)
+          .map((e) => ts.flattenDiagnosticMessageText(e.messageText, ' '))
+          .filter((m) => /extends|not found|cannot read/i.test(m))
+          .map((m) => `${path.basename(configPath)}: ${m} (analyzed without it; strictness may differ from your build)`);
+        return { options: sanitize(parsed.options), fileNames: parsed.fileNames, source: 'tsconfig', warnings };
       }
     }
   }
@@ -101,6 +108,7 @@ export function loadRepoConfig(repoRoot: string): RepoConfig {
     }),
     fileNames: walkSources(repoRoot),
     source: 'default',
+    warnings: [],
   };
 }
 
