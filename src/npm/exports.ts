@@ -91,7 +91,11 @@ export function getModuleExports(built: BuiltProgram, specifier: string): Module
   const sf = program.getSourceFile(resolution.resolvedFileName);
   if (!sf) return { resolved: true, typed: false, exports: new Map() };
 
-  const moduleSymbol = checker.getSymbolAtLocation(sf);
+  // ES-module declaration files are their own module symbol. Packages like
+  // mongoose instead declare an ambient `declare module 'name' { ... }`
+  // block, which lives in the checker's ambient module table.
+  const moduleSymbol =
+    checker.getSymbolAtLocation(sf) ?? checker.getAmbientModules().find((m) => m.name === JSON.stringify(specifier));
   if (!moduleSymbol) return { resolved: true, typed: false, exports: new Map() };
 
   const exports = new Map<string, string>();

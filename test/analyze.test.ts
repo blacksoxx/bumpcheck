@@ -86,6 +86,7 @@ describe('demo-lib 1.0.0 -> 2.0.0', () => {
     const reasons = report.unanalyzed.map((u) => u.reason).sort();
     expect(reasons).toEqual([
       '1 file imports "demo-lib" but is outside tsconfig.json, so neither tsc nor bumpcheck checks it',
+      '1 other package could not be resolved (demo-ambient); install dependencies for full coverage',
       'dynamic import("demo-lib")',
       'uses the whole module "demo-lib" as a value',
     ]);
@@ -118,5 +119,19 @@ describe('demo-lib 1.0.0 -> 1.0.0', () => {
     expect(report.breaks).toEqual([]);
     expect(report.imports.every((i) => i.status === 'unchanged')).toBe(true);
     expect(report.summary.breaks).toBe(0);
+  });
+});
+
+describe('demo-ambient 1.0.0 -> 2.0.0 (declare module style types)', () => {
+  it('reads exports from an ambient module declaration and finds the break', async () => {
+    const report = await analyzeFixture('1.0.0', '2.0.0', 'demo-ambient');
+    expect(report.meta.untyped).toBe(false);
+    expect(report.imports.map((i) => [i.name, i.status])).toEqual([
+      ['connect', 'breaking'],
+      ['version', 'unchanged'],
+    ]);
+    expect(report.breaks.map((b) => [b.kind, b.symbol, b.location.file, b.location.line])).toEqual([
+      ['arity', 'connect', 'src/ambient.ts', 3],
+    ]);
   });
 });

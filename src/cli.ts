@@ -38,7 +38,7 @@ async function main(argv: string[]): Promise<number> {
       'json-out': { type: 'string' },
       'cache-dir': { type: 'string' },
       registry: { type: 'string' },
-      fail: { type: 'boolean', default: true },
+      'no-fail': { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
   });
@@ -71,7 +71,7 @@ async function main(argv: string[]): Promise<number> {
   process.stdout.write(body + '\n');
   if (values['json-out']) await writeFile(values['json-out'], JSON.stringify(report, null, 2) + '\n');
 
-  return report.breaks.length > 0 && values.fail ? 1 : 0;
+  return report.breaks.length > 0 && !values['no-fail'] ? 1 : 0;
 }
 
 main(process.argv.slice(2)).then(
