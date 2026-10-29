@@ -150,16 +150,28 @@ export async function analyzeNpm(opts: AnalyzeOptions): Promise<Report> {
     }
   }
 
+  const diagnosticsBefore = collectDiagnostics(before, absoluteFiles);
   const breaks = untyped
     ? []
-    : diffDiagnostics(
-        repoRoot,
-        collectDiagnostics(before, absoluteFiles),
-        collectDiagnostics(after, absoluteFiles),
-        scan,
-        after,
-        overlayTo,
-      );
+    : diffDiagnostics(repoRoot, diagnosticsBefore, collectDiagnostics(after, absoluteFiles), scan, after, overlayTo);
+
+  // Unresolved modules in the baseline mean other dependencies are missing
+  // from this checkout. Their types can carry the package's types, so
+  // breaks through them cannot be seen. Say so.
+  const unresolved = new Set<string>();
+  for (const { diagnostic } of diagnosticsBefore.values()) {
+    if (diagnostic.code !== 2307) continue;
+    const m = /Cannot find module '([^']+)'/.exec(ts.flattenDiagnosticMessageText(diagnostic.messageText, ' '));
+    if (m && !m[1]!.startsWith('.')) unresolved.add(m[1]!);
+  }
+  if (unresolved.size > 0) {
+    const names = [...unresolved].sort();
+    const shown = names.length > 5 ? names.slice(0, 5).join(', ') + `, +${names.length - 5} more` : names.join(', ');
+    unanalyzed.push({
+      reason: `${names.length} other package${names.length === 1 ? '' : 's'} could not be resolved (${shown}); install dependencies for full coverage`,
+      locations: [],
+    });
+  }
 
   // A changed declaration with a break attributed to it is breaking, not
   // merely changed. Removed symbols keep their own status.

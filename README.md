@@ -38,9 +38,11 @@ You import 5 symbols from axios. None changed. Behavior not checked.
 npm install -g bumpcheck
 ```
 
-Requires Node 20 or newer and `npm` on your PATH. The repo you analyze does
-not need `node_modules` installed; bumpcheck fetches both package versions
-into its own cache.
+Requires Node 20 or newer and `npm` on your PATH. bumpcheck fetches both
+versions of the bumped package into its own cache. Run it with the repo's
+other dependencies installed: types from them, such as a tRPC wrapper around
+react-query, are part of what can break. Without `node_modules` the report
+says how many imports could not be resolved.
 
 The command runs against one project root: the directory holding the
 `package.json` that was bumped, analyzed under that directory's
@@ -80,7 +82,8 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
-        with: { node-version: 22 }
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --ignore-scripts
       - name: Find bumped packages
         id: bumps
         run: |
@@ -164,18 +167,29 @@ their base commit and runs bumpcheck on each bump. A `--oracle` mode then
 installs the new version into the checkout and runs the repo's own `tsc`; the
 new errors it reports are the ground truth.
 
-Results so far, from [corpus/results.md](corpus/results.md):
+Results so far, from [corpus/results.md](corpus/results.md). Four of the
+pull requests needed a human to change code before merging, which tests the
+case that matters: does the tool stay quiet when it should not?
 
-| bumps | bumpcheck | tsc oracle |
-|---|---|---|
-| 6 bumps that needed no code changes | 0 breaks on each | 0 new errors on each |
-| zod 3.23.8 → 4.6.5 in a 36-file API, merged without CI | 79 breaks | 84 new errors |
+| bump | bumpcheck | tsc oracle | what the human changed |
+|---|---|---|---|
+| zod 3.23.8 → 4.6.5, 36-file API merged without CI | 79 breaks | 84 new errors | nothing; the repo has not compiled since |
+| zod 3.25.76 → 4.6.7, MCP server | 6 breaks | 6 new errors | the schema the 6 test errors pointed at |
+| react-query 4 → 5, 20-hook app | 20 breaks | 28 new errors | 16 hunks, 13 of them at reported lines |
+| react-query 4 → 5, Electron app | 3 breaks | 3 new errors | 1 of the 3 sites; the other 2 landed via a separate PR |
+| msw 1 → 2, tests outside tsconfig | 0, with a note that 1 importing file is outside tsconfig | 0 | the test files tsc does not see |
+| 6 bumps that needed no code changes | 0 breaks each | 0 new errors each | nothing |
 
-The five-error gap is TypeScript's "implicitly has an 'any' type" follow-on
-errors, which bumpcheck folds into the root cause on the same statement. On
-root causes the two lists are identical, file and line.
+Every gap between the two columns is TypeScript's "implicitly has an 'any'
+type" follow-on errors, which bumpcheck folds into the root error on the
+same statement. On root causes the lists match, file and line.
 
-Seven cases is a start, not a statistic. Add one with a pull request URL and
+Two lessons from the corpus are now part of the tool: run with the repo's
+dependencies installed, because types from other packages carry the bumped
+package's types, and say so when files that import the package sit outside
+the tsconfig.
+
+Eleven cases is a start, not a statistic. Add one with a pull request URL and
 a base commit in [corpus/cases.json](corpus/cases.json) and run
 `npx tsx corpus/run.ts --oracle`.
 

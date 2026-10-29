@@ -57,7 +57,15 @@ async function checkout(c: Case): Promise<string> {
     const co = await sh('git', ['checkout', '-q', c.base], dir);
     if (co.code !== 0) throw new Error(co.out);
   }
-  return c.dir ? path.join(dir, c.dir) : dir;
+  const root = c.dir ? path.join(dir, c.dir) : dir;
+  // Analyze the way CI would: with the repo's own dependencies installed.
+  if (!(await exists(path.join(root, 'node_modules')))) {
+    const base = ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--loglevel=error'];
+    let r = await sh('npm', base, root);
+    if (r.code !== 0) r = await sh('npm', [...base, '--legacy-peer-deps'], root);
+    if (r.code !== 0) process.stderr.write(`  (dependency install failed for ${c.id}; analyzing without node_modules)\n`);
+  }
+  return root;
 }
 
 /**
