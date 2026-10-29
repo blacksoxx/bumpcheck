@@ -15,7 +15,7 @@ describe('demo-lib 1.0.0 -> 2.0.0', () => {
   });
 
   it('finds every file that imports the package and no others', () => {
-    expect(report.files).toEqual(['src/dyn.ts', 'src/extra.ts', 'src/legacy.js', 'src/main.ts', 'src/ns.ts', 'src/synthetic.ts']);
+    expect(report.files).toEqual(['src/dyn.ts', 'src/extra.ts', 'src/legacy.js', 'src/main.ts', 'src/ns.ts', 'src/peer.ts', 'src/synthetic.ts']);
   });
 
   it('reports exactly the planted breaks, with line numbers and attribution', () => {
@@ -86,7 +86,7 @@ describe('demo-lib 1.0.0 -> 2.0.0', () => {
     const reasons = report.unanalyzed.map((u) => u.reason).sort();
     expect(reasons).toEqual([
       '1 file imports "demo-lib" but is outside tsconfig.json, so neither tsc nor bumpcheck checks it',
-      '1 other package could not be resolved (demo-ambient); install dependencies for full coverage',
+      '2 other packages could not be resolved (demo-ambient, demo-peer); install dependencies for full coverage',
       'dynamic import("demo-lib")',
       'uses the whole module "demo-lib" as a value',
     ]);
@@ -96,9 +96,9 @@ describe('demo-lib 1.0.0 -> 2.0.0', () => {
 
   it('keeps a consistent summary', () => {
     expect(report.summary).toMatchObject({
-      importedSymbols: 11,
+      importedSymbols: 12,
       unchanged: 3,
-      changed: 1,
+      changed: 2,
       breaking: 6,
       removed: 1,
       unknown: 0,
@@ -133,5 +133,35 @@ describe('demo-ambient 1.0.0 -> 2.0.0 (declare module style types)', () => {
     expect(report.breaks.map((b) => [b.kind, b.symbol, b.location.file, b.location.line])).toEqual([
       ['arity', 'connect', 'src/ambient.ts', 3],
     ]);
+  });
+});
+
+describe('demo-peer 1.0.0 -> 1.0.1 (peer dependency shared with the repo)', () => {
+  it('resolves the peer from the repo instead of a second copy, so no false break', async () => {
+    const { mkdtemp, cp, mkdir } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const path = await import('node:path');
+    const { analyzeNpm, LocalProvider } = await import('../src/index.js');
+    const { fixtures } = await import('./helpers.js');
+
+    // A consumer with demo-lib installed, as a real repo would have.
+    const repo = await mkdtemp(path.join(tmpdir(), 'bumpcheck-peer-repo-'));
+    await cp(path.join(fixtures, 'consumer'), repo, { recursive: true });
+    await mkdir(path.join(repo, 'node_modules'), { recursive: true });
+    await cp(path.join(fixtures, 'demo-lib-v1'), path.join(repo, 'node_modules', 'demo-lib'), { recursive: true });
+
+    // Both demo-peer versions ship with their own copy of demo-lib, as npm
+    // would install for the overlay. Client has a private member, so two
+    // copies are nominally different types.
+    const work = await mkdtemp(path.join(tmpdir(), 'bumpcheck-peer-'));
+    const withOwnCopy = (v: string) => ({
+      dir: path.join(fixtures, `demo-peer-${v}`),
+      deps: { 'demo-lib': path.join(fixtures, 'demo-lib-v1') },
+    });
+    const provider = new LocalProvider({ 'demo-peer@1.0.0': withOwnCopy('1.0.0'), 'demo-peer@1.0.1': withOwnCopy('1.0.1') }, work);
+
+    const report = await analyzeNpm({ repoRoot: repo, pkg: 'demo-peer', from: '1.0.0', to: '1.0.1', provider });
+    expect(report.breaks).toEqual([]);
+    expect(report.imports.map((i) => [i.name, i.status])).toEqual([['attach', 'unchanged']]);
   });
 });

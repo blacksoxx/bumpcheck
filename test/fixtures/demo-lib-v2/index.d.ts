@@ -12,6 +12,7 @@ export declare function stable(n: number): number;
 export declare function fetchThing(id: string): Promise<{ id: string; title: string }>;
 export declare function greet(name: string, options?: { greeting: string }): string;
 export declare class Client {
+  private token;
   constructor(opts?: Options);
   get(url: string): Promise<{ body: string }>;
 }

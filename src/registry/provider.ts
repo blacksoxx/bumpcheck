@@ -159,11 +159,17 @@ export function definitelyTypedName(pkg: string): string {
  * Copies a local directory into an overlay. Used by tests and for air-gapped
  * runs where the package contents are already on disk.
  */
+export interface LocalSource {
+  dir: string;
+  /** Extra packages to place beside it in the overlay, as a real install would. */
+  deps?: Record<string, string>;
+}
+
 export class LocalProvider implements PackageProvider {
   private readonly inflight = new Map<string, Promise<string>>();
 
   constructor(
-    private readonly sources: Record<string, string>,
+    private readonly sources: Record<string, string | LocalSource>,
     private readonly workDir: string,
   ) {}
 
@@ -178,13 +184,19 @@ export class LocalProvider implements PackageProvider {
   }
 
   private async materialize(pkg: string, key: string): Promise<string> {
-    const src = this.sources[key];
-    if (!src) throw new Error(`LocalProvider has no source for ${key}`);
+    const raw = this.sources[key];
+    if (!raw) throw new Error(`LocalProvider has no source for ${key}`);
+    const src: LocalSource = typeof raw === 'string' ? { dir: raw } : raw;
     const overlay = path.join(this.workDir, safeSegment(key));
     const dest = path.join(overlay, 'node_modules', pkg);
     await rm(overlay, { recursive: true, force: true });
     await mkdir(path.dirname(dest), { recursive: true });
-    await cp(src, dest, { recursive: true });
+    await cp(src.dir, dest, { recursive: true });
+    for (const [name, dir] of Object.entries(src.deps ?? {})) {
+      const depDest = path.join(overlay, 'node_modules', name);
+      await mkdir(path.dirname(depDest), { recursive: true });
+      await cp(dir, depDest, { recursive: true });
+    }
     return overlay;
   }
 }

@@ -1,5 +1,6 @@
 import path from 'node:path';
-import { readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import semver from 'semver';
 import ts from 'typescript';
 
 export interface RepoConfig {
@@ -34,6 +35,28 @@ export function isInside(root: string, file: string): boolean {
 
 export function isTargetSpecifier(specifier: string, pkg: string): boolean {
   return specifier === pkg || specifier.startsWith(pkg + '/');
+}
+
+/** `@scope/name/sub` -> `@scope/name`; `name/sub` -> `name`; relative -> undefined. */
+export function packageNameOf(specifier: string): string | undefined {
+  if (specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('node:')) return undefined;
+  const parts = specifier.split('/');
+  return specifier.startsWith('@') ? (parts.length >= 2 ? `${parts[0]}/${parts[1]}` : undefined) : parts[0];
+}
+
+interface Manifest {
+  version?: string;
+  dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+}
+
+function readManifest(file: string): Manifest | undefined {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')) as Manifest;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -126,10 +149,40 @@ export function buildProgram(repoRoot: string, config: RepoConfig, target: Targe
   const resolveTarget = (specifier: string): ts.ResolvedModuleWithFailedLookupLocations =>
     ts.resolveModuleName(specifier, anchor, config.options, host, overlayCache);
 
+  // The package's own dependencies come from the repo when the repo's
+  // installed version satisfies the declared range, which is what npm's
+  // dedupe does. Otherwise two copies of a shared dependency (say
+  // @nestjs/common) would produce "types have separate declarations" errors
+  // that no real install has.
+  const manifest = readManifest(path.join(target.overlay, 'node_modules', target.pkg, 'package.json'));
+  const ranges: Record<string, string> = {
+    ...manifest?.optionalDependencies,
+    ...manifest?.dependencies,
+    ...manifest?.peerDependencies,
+  };
+  const repoAnchor = path.join(repoRoot, '__bumpcheck_anchor__.ts');
+  const repoVersions = new Map<string, string | undefined>();
+  const repoSatisfies = (name: string): boolean => {
+    const range = ranges[name];
+    if (!range) return false;
+    if (!repoVersions.has(name)) {
+      repoVersions.set(name, readManifest(path.join(repoRoot, 'node_modules', name, 'package.json'))?.version);
+    }
+    const version = repoVersions.get(name);
+    return !!version && semver.satisfies(version, range, { includePrerelease: true });
+  };
+
   host.resolveModuleNameLiterals = (literals, containingFile, redirectedReference, options) =>
     literals.map((lit) => {
-      if (isTargetSpecifier(lit.text, target.pkg) && !isInside(target.overlay, containingFile)) {
+      const fromOverlay = isInside(target.overlay, containingFile);
+      if (isTargetSpecifier(lit.text, target.pkg) && !fromOverlay) {
         return resolveTarget(lit.text);
+      }
+      if (fromOverlay) {
+        const dep = packageNameOf(lit.text);
+        if (dep && dep !== target.pkg && repoSatisfies(dep)) {
+          return ts.resolveModuleName(lit.text, repoAnchor, options, host, repoCache, redirectedReference);
+        }
       }
       return ts.resolveModuleName(lit.text, containingFile, options, host, repoCache, redirectedReference);
     });
