@@ -35,8 +35,21 @@ const TS_EXTENSIONS = new Set<string>([
   ts.Extension.Dcts,
 ]);
 
+export const NAMESPACE_PREFIX = 'namespace:';
+
+function isModuleLike(sym: ts.Symbol): boolean {
+  if (sym.flags & (ts.SymbolFlags.ValueModule | ts.SymbolFlags.NamespaceModule)) return true;
+  return (sym.declarations ?? []).some((d) => ts.isSourceFile(d) || ts.isModuleDeclaration(d));
+}
+
 function symbolSignature(checker: ts.TypeChecker, sym: ts.Symbol): string {
   const target = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
+  if (isModuleLike(target)) {
+    // A namespace is its member list. Comparing the file text of a module
+    // would flag every internal reshuffle as a change.
+    const names = checker.getExportsOfModule(target).map((e) => e.name).sort();
+    return NAMESPACE_PREFIX + names.join(',');
+  }
   const decls = target.declarations ?? [];
   if (decls.length === 0) {
     // No declaration (e.g. synthesized `export =` members). Fall back to the type.
@@ -67,6 +80,15 @@ export function getModuleExports(built: BuiltProgram, specifier: string): Module
   const exports = new Map<string, string>();
   for (const sym of checker.getExportsOfModule(moduleSymbol)) {
     exports.set(sym.name, symbolSignature(checker, sym));
+  }
+
+  // `import x from 'pkg'` compiles against a module with no default export
+  // when synthetic defaults are allowed; the default is then the module
+  // itself. Mirror that so the import is checked instead of marked unknown.
+  const options = program.getCompilerOptions();
+  const synthetic = options.allowSyntheticDefaultImports ?? options.esModuleInterop ?? false;
+  if (!exports.has('default') && synthetic) {
+    exports.set('default', NAMESPACE_PREFIX + [...exports.keys()].sort().join(','));
   }
   return { resolved: true, typed: true, exports };
 }

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, rm, stat, cp } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, stat, cp } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
@@ -104,14 +104,55 @@ export class NpmProvider implements PackageProvider {
     if (this.registry) args.push(`--registry=${this.registry}`);
     await run(this.npm, args, overlay);
 
-    const installed = path.join(overlay, 'node_modules', pkg, 'package.json');
-    const manifest = JSON.parse(await readFile(installed, 'utf8')) as { version?: string };
+    const pkgDir = path.join(overlay, 'node_modules', pkg);
+    const manifest = JSON.parse(await readFile(path.join(pkgDir, 'package.json'), 'utf8')) as Manifest;
     if (manifest.version !== version) {
       throw new Error(`Expected ${pkg}@${version}, npm installed ${manifest.version ?? 'unknown'}`);
     }
-    await writeJson(marker, { pkg, version, at: new Date().toISOString() });
+
+    // Packages without their own declarations usually have a DefinitelyTyped
+    // package. Install the one matching this major, best effort, so the
+    // overlay resolves the way the consumer's node_modules would.
+    let types: string | undefined;
+    if (!(await shipsTypes(pkgDir, manifest))) {
+      const typesName = definitelyTypedName(pkg);
+      const major = version.split('.')[0];
+      for (const spec of [`${typesName}@${major}`, typesName]) {
+        try {
+          await run(this.npm, [...args.slice(0, 1), spec, ...args.slice(2)], overlay);
+          types = spec;
+          break;
+        } catch {
+          // No matching @types package; the report will say so.
+        }
+      }
+    }
+    await writeJson(marker, { pkg, version, types, at: new Date().toISOString() });
     return overlay;
   }
+}
+
+interface Manifest {
+  version?: string;
+  types?: string;
+  typings?: string;
+  exports?: unknown;
+}
+
+async function shipsTypes(pkgDir: string, manifest: Manifest): Promise<boolean> {
+  if (manifest.types || manifest.typings) return true;
+  if (manifest.exports && JSON.stringify(manifest.exports).includes('"types"')) return true;
+  const entries = await readdir(pkgDir).catch(() => [] as string[]);
+  return entries.some((e) => e.endsWith('.d.ts') || e.endsWith('.d.mts') || e.endsWith('.d.cts'));
+}
+
+/** `@scope/name` becomes `@types/scope__name`, as DefinitelyTyped does. */
+export function definitelyTypedName(pkg: string): string {
+  if (pkg.startsWith('@')) {
+    const [scope, name] = pkg.slice(1).split('/');
+    return `@types/${scope}__${name}`;
+  }
+  return `@types/${pkg}`;
 }
 
 /**

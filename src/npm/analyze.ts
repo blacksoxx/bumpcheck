@@ -4,9 +4,9 @@ import ts from 'typescript';
 import type { ImportedSymbol, Report, Summary, Unanalyzed } from '../types.js';
 import { SCHEMA_VERSION } from '../types.js';
 import type { PackageProvider } from '../registry/provider.js';
-import { buildProgram, loadRepoConfig } from './program.js';
+import { buildProgram, isInside, loadRepoConfig } from './program.js';
 import { scanImports } from './imports.js';
-import { getModuleExports, type ModuleExports } from './exports.js';
+import { getModuleExports, NAMESPACE_PREFIX, type ModuleExports } from './exports.js';
 import { collectDiagnostics, diffDiagnostics } from './diagnostics.js';
 
 export interface AnalyzeOptions {
@@ -15,6 +15,23 @@ export interface AnalyzeOptions {
   from: string;
   to: string;
   provider: PackageProvider;
+}
+
+/**
+ * For namespaces, say which members came and went instead of dumping two
+ * member lists. Everything else is shown as the normalized declaration.
+ */
+function describeChange(before: string, after: string): { before: string; after: string } {
+  if (!before.startsWith(NAMESPACE_PREFIX) || !after.startsWith(NAMESPACE_PREFIX)) return { before, after };
+  const a = new Set(before.slice(NAMESPACE_PREFIX.length).split(',').filter(Boolean));
+  const b = new Set(after.slice(NAMESPACE_PREFIX.length).split(',').filter(Boolean));
+  const removed = [...a].filter((n) => !b.has(n));
+  const added = [...b].filter((n) => !a.has(n));
+  const list = (xs: string[]) => (xs.length > 12 ? xs.slice(0, 12).join(', ') + `, +${xs.length - 12} more` : xs.join(', '));
+  const parts = [`namespace with ${b.size} members`];
+  if (removed.length) parts.push(`removed: ${list(removed)}`);
+  if (added.length) parts.push(`added: ${list(added)}`);
+  return { before: `namespace with ${a.size} members`, after: parts.join('; ') };
 }
 
 /**
@@ -40,7 +57,14 @@ export async function analyzeNpm(opts: AnalyzeOptions): Promise<Report> {
   // Imports are a property of the repo, not of the version, so either
   // program would do; the "after" program keeps attribution consistent.
   const scan = scanImports(repoRoot, after, opts.pkg, overlayTo);
-  const absoluteFiles = scan.files.map((f) => path.join(repoRoot, f));
+
+  // Breaks can surface in files that never import the package, when a type
+  // from it flows through another module. So every repo source file is
+  // checked; the differential keeps unrelated errors out.
+  const absoluteFiles = after.program
+    .getSourceFiles()
+    .filter((sf) => !sf.isDeclarationFile && isInside(repoRoot, sf.fileName) && !sf.fileName.includes(`${path.sep}node_modules${path.sep}`))
+    .map((sf) => sf.fileName);
 
   const specifiers = [...new Set(scan.refs.map((r) => r.specifier))];
   const exportsBefore = new Map<string, ModuleExports>();
@@ -50,8 +74,12 @@ export async function analyzeNpm(opts: AnalyzeOptions): Promise<Report> {
     exportsAfter.set(spec, getModuleExports(after, spec));
   }
 
-  const entryAfter = getModuleExports(after, opts.pkg);
-  const untyped = !entryAfter.typed;
+  // "Untyped" means every imported entry resolves to JavaScript with no
+  // declarations. A specifier that does not resolve at all is a different
+  // fact: the diagnostics diff reports it as a missing module. When nothing
+  // imports the package, neither claim applies.
+  const afterEntries = [...exportsAfter.values()];
+  const untyped = afterEntries.length > 0 && afterEntries.every((e) => e.resolved && !e.typed);
 
   const unanalyzed: Unanalyzed[] = [...scan.unanalyzed];
   const imports: ImportedSymbol[] = scan.refs.map((ref) => {
@@ -77,12 +105,12 @@ export async function analyzeNpm(opts: AnalyzeOptions): Promise<Report> {
       return { ...ref, status: 'unknown', change: { after: sigAfter } };
     }
     if (sigBefore === sigAfter) return { ...ref, status: 'unchanged' };
-    return { ...ref, status: 'changed', change: { before: sigBefore, after: sigAfter } };
+    return { ...ref, status: 'changed', change: describeChange(sigBefore, sigAfter) };
   });
 
   if (untyped) {
     unanalyzed.push({
-      reason: `${opts.pkg}@${opts.to} ships no type declarations; nothing can be proven`,
+      reason: `${opts.pkg}@${opts.to} ships no type declarations and none were found on DefinitelyTyped; nothing can be proven`,
       locations: [],
     });
   }
@@ -90,7 +118,10 @@ export async function analyzeNpm(opts: AnalyzeOptions): Promise<Report> {
     const a = exportsAfter.get(spec)!;
     const b = exportsBefore.get(spec)!;
     if (b.resolved && !a.resolved) {
-      // Handled by the diagnostics diff as missing-module; nothing to add.
+      unanalyzed.push({
+        reason: `"${spec}" does not resolve in ${opts.to} under this repo's module resolution; see breaks`,
+        locations: scan.refs.filter((r) => r.specifier === spec).flatMap((r) => r.locations),
+      });
       continue;
     }
     if (a.resolved && !a.typed && !untyped) {

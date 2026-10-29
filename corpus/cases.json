@@ -1,0 +1,73 @@
+[
+  {
+    "id": "zod-signpost-api",
+    "repo": "Signpost-Labs/signpost-api",
+    "base": "5b59ddf70d3c66092e609b2ddad2a99386b98292",
+    "pkg": "zod",
+    "from": "3.23.8",
+    "to": "4.6.5",
+    "pr": "https://github.com/Signpost-Labs/signpost-api/pull/3",
+    "truth": "merged with no code changes; repo has no typecheck in CI"
+  },
+  {
+    "id": "zod-netbox-mcp",
+    "repo": "SimonPrinz/netbox-mcp",
+    "base": "eda3fbc2c380a0ec723bd5d0b51f2cec209a6f0c",
+    "pkg": "zod",
+    "from": "3.25.76",
+    "to": "4.6.7",
+    "pr": "https://github.com/SimonPrinz/netbox-mcp/pull/3",
+    "truth": "merged with no code changes"
+  },
+  {
+    "id": "zod-game-analytics",
+    "repo": "neokry/game-analytics-server",
+    "base": "25af27dd43a3b7ec68ca6c9ec19f700e419b7713",
+    "pkg": "zod",
+    "from": "3.25.76",
+    "to": "4.6.7",
+    "truth": "merged with no code changes"
+  },
+  {
+    "id": "commander-opentwins",
+    "repo": "Open-Twin/opentwins",
+    "base": "d6effa279eff4cd2d0651a4810a2346eedc31400",
+    "pkg": "commander",
+    "from": "12.1.0",
+    "to": "14.0.3",
+    "pr": "https://github.com/Open-Twin/opentwins/pull/12",
+    "truth": "merged with no code changes"
+  },
+  {
+    "id": "commander-clean-nestjs-patch",
+    "repo": "jheisonnovak/clean-nestjs-cli",
+    "base": "16be48490f326529bd33437699fda3e9b019a995",
+    "pkg": "commander",
+    "from": "14.0.2",
+    "to": "14.0.3",
+    "pr": "https://github.com/jheisonnovak/clean-nestjs-cli/pull/110",
+    "truth": "patch bump, merged with no code changes"
+  },
+  {
+    "id": "commander-recipes",
+    "repo": "npalm/recipes",
+    "base": "d68640fce582ea0dba17242c038bd1b970bfa4c3",
+    "dir": "tools/cli",
+    "pkg": "commander",
+    "from": "12.1.0",
+    "to": "14.0.2",
+    "pr": "https://github.com/npalm/recipes/pull/12",
+    "truth": "merged with no code changes"
+  },
+  {
+    "id": "uuid-aws-routes",
+    "repo": "aws-samples/delivery-routes-optimization-for-logistics",
+    "base": "6bf53809e7eb74caaf6169036509e7c200ec0a75",
+    "dir": "apps_infra",
+    "pkg": "uuid",
+    "from": "9.0.1",
+    "to": "14.0.0",
+    "pr": "https://github.com/aws-samples/delivery-routes-optimization-for-logistics/pull/9",
+    "truth": "merged with no code changes; apps_infra never imports uuid (dead dependency), apps_web does"
+  }
+]

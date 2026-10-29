@@ -164,8 +164,28 @@ function findBinding(root: ts.Node, locals: Map<string, { name: string }>): stri
   return found;
 }
 
+/**
+ * Members of namespace-like imports (`import { z } from 'zod'`), so a type
+ * declared as `ZodError` can be traced to the `z` the file actually imports.
+ */
+function namespaceMembers(checker: ts.TypeChecker, targets: Map<ts.Symbol, string>): Map<ts.Symbol, string> {
+  const out = new Map<ts.Symbol, string>();
+  for (const [sym, name] of targets) {
+    const isModule =
+      sym.flags & (ts.SymbolFlags.ValueModule | ts.SymbolFlags.NamespaceModule) ||
+      (sym.declarations ?? []).some((d) => ts.isSourceFile(d) || ts.isModuleDeclaration(d));
+    if (!isModule) continue;
+    for (const member of checker.getExportsOfModule(sym)) {
+      const resolved = member.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(member) : member;
+      if (!out.has(resolved)) out.set(resolved, name);
+    }
+  }
+  return out;
+}
+
 function findType(root: ts.Node, checker: ts.TypeChecker, overlay: string, targets: Map<ts.Symbol, string>): string | undefined {
   let found: string | undefined;
+  let members: Map<ts.Symbol, string> | undefined;
   const visit = (n: ts.Node) => {
     if (found) return;
     if (ts.isExpression(n) || ts.isIdentifier(n)) {
@@ -175,7 +195,12 @@ function findType(root: ts.Node, checker: ts.TypeChecker, overlay: string, targe
         for (const decl of sym.declarations ?? []) {
           if (!isInside(overlay, decl.getSourceFile().fileName)) continue;
           const top = topLevelSymbol(checker, decl);
-          const name = top ? targets.get(top) : undefined;
+          if (!top) continue;
+          let name = targets.get(top);
+          if (!name) {
+            members ??= namespaceMembers(checker, targets);
+            name = members.get(top);
+          }
           if (name) {
             found = name;
             return;
