@@ -109,5 +109,16 @@
     "to": "5.90.14",
     "pr": "https://github.com/dmingn/scene-selector/pull/185",
     "truth": "human fixed src/renderer/components/FrameImage.tsx before merge (isLoading to isPending)"
+  },
+  {
+    "id": "nestjs-core-aws-checkout",
+    "repo": "aws-samples/sample-multi-region-resilient-microservice-on-aws",
+    "base": "12389d0d4e78e0c9814ad6f42208626893c0ba15",
+    "dir": "source/checkout",
+    "pkg": "@nestjs/core",
+    "from": "11.2.7",
+    "to": "11.2.8",
+    "pr": "https://github.com/aws-samples/sample-multi-region-resilient-microservice-on-aws/pull/212",
+    "truth": "lockfile-only patch bump merged with no code changes; @nestjs/core shares @nestjs/common with the repo, which once produced false breaks"
   }
 ]

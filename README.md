@@ -112,7 +112,10 @@ If more than one project needs `npm ci`, add a step per directory.
 ## How it works
 
 1. Both versions are installed with `npm install --ignore-scripts` into a
-   per-version cache, so their own dependencies resolve.
+   per-version cache. When the package's own dependencies are also installed
+   in your repo at a version that satisfies its declared range, those copies
+   are used, as npm's dedupe would. Otherwise two copies of a shared type
+   such as `@nestjs/common` would disagree with each other.
 2. Two TypeScript programs are built over your repo, identical except that
    every import of the package resolves to one version or the other.
 3. Every import of the package is collected: named, default, namespace

@@ -7,17 +7,18 @@ Columns: what bumpcheck reported, what the pull request actually did, and the ts
 
 | case | bump | imports | breaks | symbols broken | changed ok | unknown | ms | pull request | tsc oracle |
 |---|---|---|---|---|---|---|---|---|---|
-| zod-signpost-api | zod 3.23.8 → 4.6.5 | 4 | 79 | 3 | 1 | 0 | 3888 | merged with no code changes; repo has no typecheck in CI | tsc: 84 new errors (cached) |
-| zod-netbox-mcp | zod 3.25.76 → 4.6.7 | 1 | 0 | 0 | 1 | 0 | 1029 | merged with no code changes | tsc: 0 new errors (cached) |
-| zod-game-analytics | zod 3.25.76 → 4.6.7 | 1 | 0 | 0 | 1 | 0 | 5424 | merged with no code changes | tsc: 0 new errors (cached) |
-| commander-opentwins | commander 12.1.0 → 14.0.3 | 1 | 0 | 0 | 1 | 0 | 915 | merged with no code changes | tsc: 0 new errors (cached) |
-| commander-clean-nestjs-patch | commander 14.0.2 → 14.0.3 | 2 | 0 | 0 | 0 | 0 | 830 | patch bump, merged with no code changes | tsc: 0 new errors (cached) |
-| commander-recipes | commander 12.1.0 → 14.0.2 | 1 | 0 | 0 | 1 | 0 | 467 | merged with no code changes | tsc: 0 new errors (cached) |
-| uuid-aws-routes | uuid 9.0.1 → 14.0.0 | 0 | 0 | 0 | 0 | 0 | 4425 | merged with no code changes; apps_infra never imports uuid (dead dependency), apps_web does | tsc: 0 new errors (cached) |
-| zod-esa-mcp-fixed | zod 3.25.76 → 4.6.7 | 1 | 6 | 0 | 1 | 0 | 1986 | human fixed src/tools/post-actions.ts before merge (zod 4 made targetTeamName required) | tsc: 6 new errors (cached) |
-| msw-mergent-fixed | msw 1.3.3 → 2.7.0 | 0 | 0 | 0 | 0 | 0 | 573 | human migrated test/Client.test.ts and test/mocks/server.ts to msw 2 before merge | tsc: 0 new errors (cached) |
-| react-query-gather-kids-fixed | @tanstack/react-query 4.42.0 → 5.102.8 | 5 | 20 | 3 | 2 | 0 | 11698 | human migrated 4 src files to the v5 object API before merge | tsc: 28 new errors (cached) |
-| react-query-scene-selector-fixed | @tanstack/react-query 4.36.1 → 5.90.14 | 2 | 3 | 1 | 1 | 0 | 2845 | human fixed src/renderer/components/FrameImage.tsx before merge (isLoading to isPending) | tsc: 3 new errors (cached) |
+| zod-signpost-api | zod 3.23.8 → 4.6.5 | 4 | 79 | 3 | 1 | 0 | 4268 | merged with no code changes; repo has no typecheck in CI | tsc: 84 new errors (cached) |
+| zod-netbox-mcp | zod 3.25.76 → 4.6.7 | 1 | 0 | 0 | 1 | 0 | 1078 | merged with no code changes | tsc: 0 new errors (cached) |
+| zod-game-analytics | zod 3.25.76 → 4.6.7 | 1 | 0 | 0 | 1 | 0 | 5994 | merged with no code changes | tsc: 0 new errors (cached) |
+| commander-opentwins | commander 12.1.0 → 14.0.3 | 1 | 0 | 0 | 1 | 0 | 1061 | merged with no code changes | tsc: 0 new errors (cached) |
+| commander-clean-nestjs-patch | commander 14.0.2 → 14.0.3 | 2 | 0 | 0 | 0 | 0 | 1014 | patch bump, merged with no code changes | tsc: 0 new errors (cached) |
+| commander-recipes | commander 12.1.0 → 14.0.2 | 1 | 0 | 0 | 1 | 0 | 672 | merged with no code changes | tsc: 0 new errors (cached) |
+| uuid-aws-routes | uuid 9.0.1 → 14.0.0 | 0 | 0 | 0 | 0 | 0 | 5434 | merged with no code changes; apps_infra never imports uuid (dead dependency), apps_web does | tsc: 0 new errors (cached) |
+| zod-esa-mcp-fixed | zod 3.25.76 → 4.6.7 | 1 | 6 | 0 | 1 | 0 | 2501 | human fixed src/tools/post-actions.ts before merge (zod 4 made targetTeamName required) | tsc: 6 new errors (cached) |
+| msw-mergent-fixed | msw 1.3.3 → 2.7.0 | 0 | 0 | 0 | 0 | 0 | 671 | human migrated test/Client.test.ts and test/mocks/server.ts to msw 2 before merge | tsc: 0 new errors (cached) |
+| react-query-gather-kids-fixed | @tanstack/react-query 4.42.0 → 5.102.8 | 5 | 20 | 3 | 2 | 0 | 15196 | human migrated 4 src files to the v5 object API before merge | tsc: 28 new errors (cached) |
+| react-query-scene-selector-fixed | @tanstack/react-query 4.36.1 → 5.90.14 | 2 | 3 | 1 | 1 | 0 | 3507 | human fixed src/renderer/components/FrameImage.tsx before merge (isLoading to isPending) | tsc: 3 new errors (cached) |
+| nestjs-core-aws-checkout | @nestjs/core 11.2.7 → 11.2.8 | 1 | 0 | 0 | 0 | 0 | 4752 | lockfile-only patch bump merged with no code changes; @nestjs/core shares @nestjs/common with the repo, which once produced false breaks | tsc: 0 new errors (cached) |
 
 ### zod-signpost-api
 
@@ -127,7 +128,7 @@ NOT ANALYZED
     tests/middleware/errorHandler.test.ts:1:1
     tests/middleware/validate.test.ts:1:1
 
-Checked 36 files with TypeScript 5.9.3 in 3888 ms.
+Checked 36 files with TypeScript 5.9.3 in 4268 ms.
 ```
 
 ### zod-netbox-mcp
@@ -144,7 +145,7 @@ CHANGED, STILL TYPECHECKS
     after:  namespace with 1241 members; removed: AnyZodObject, AnyZodTuple, ArrayCardinality, ArrayKeys, AssertArray, AsyncParseReturnType, CatchallInput, CatchallOutput, …
     src/tools.ts:6:10
 
-Checked 1 file with TypeScript 5.9.3 in 1029 ms.
+Checked 1 file with TypeScript 5.9.3 in 1078 ms.
 ```
 
 ### zod-game-analytics
@@ -159,7 +160,7 @@ CHANGED, STILL TYPECHECKS
     after:  namespace with 1241 members; removed: AnyZodObject, AnyZodTuple, ArrayCardinality, ArrayKeys, AssertArray, AsyncParseReturnType, CatchallInput, CatchallOutput, …
     src/http/validation.ts:1:10
 
-Checked 1 file with TypeScript 5.9.3 in 5424 ms.
+Checked 1 file with TypeScript 5.9.3 in 5994 ms.
 ```
 
 ### commander-opentwins
@@ -176,7 +177,7 @@ CHANGED, STILL TYPECHECKS
     after:  …ment < T > ( flags : string , description : string , parseArg : ( value : string , previous : T ) => T , defaultValue ? : T , ) : this ; argument ( name : strin…
     src/cli/program.ts:1:10
 
-Checked 1 file with TypeScript 5.9.3 in 915 ms.
+Checked 1 file with TypeScript 5.9.3 in 1061 ms.
 ```
 
 ### commander-clean-nestjs-patch
@@ -190,7 +191,7 @@ You import 2 symbols from commander. None changed. Behavior not checked.
 UNCHANGED (2)
   Command, program
 
-Checked 4 files with TypeScript 5.9.3 in 830 ms.
+Checked 4 files with TypeScript 5.9.3 in 1014 ms.
 ```
 
 ### commander-recipes
@@ -211,7 +212,7 @@ CHANGED, STILL TYPECHECKS
     src/commands/config.ts:7:10
     src/index.ts:9:10
 
-Checked 5 files with TypeScript 5.9.3 in 467 ms.
+Checked 5 files with TypeScript 5.9.3 in 672 ms.
 ```
 
 ### uuid-aws-routes
@@ -222,7 +223,7 @@ PR: https://github.com/aws-samples/delivery-routes-optimization-for-logistics/pu
 uuid 9.0.1 -> 14.0.0
 Nothing in this repo imports uuid.
 
-Checked 0 files with TypeScript 5.9.3 in 4425 ms.
+Checked 0 files with TypeScript 5.9.3 in 5434 ms.
 ```
 
 ### zod-esa-mcp-fixed
@@ -260,7 +261,7 @@ CHANGED, STILL TYPECHECKS
     src/tools/post-actions.ts:1:10
     src/tools/index.ts:2:15
 
-Checked 13 files with TypeScript 5.9.3 in 1986 ms.
+Checked 13 files with TypeScript 5.9.3 in 2501 ms.
 ```
 
 ### msw-mergent-fixed
@@ -275,7 +276,7 @@ NOT ANALYZED
   1 file imports "msw" but is outside tsconfig.json, so neither tsc nor bumpcheck checks it
     test/mocks/server.ts:1:1
 
-Checked 0 files with TypeScript 5.9.3 in 573 ms.
+Checked 0 files with TypeScript 5.9.3 in 671 ms.
 ```
 
 ### react-query-gather-kids-fixed
@@ -393,7 +394,7 @@ CHANGED, STILL TYPECHECKS
     src/app/(admin)/ministries/page.tsx:50:10
     src/app/(admin)/rosters/page.tsx:91:10
 
-Checked 26 files with TypeScript 5.9.3 in 11698 ms.
+Checked 26 files with TypeScript 5.9.3 in 15196 ms.
 ```
 
 ### react-query-scene-selector-fixed
@@ -424,5 +425,19 @@ CHANGED, STILL TYPECHECKS
     after:  QueryClientProvider : ( { client , children , } : QueryClientProviderProps ) => React . JSX . Element
     src/renderer/components/context-providers/TrpcContextsProvider.tsx:1:23
 
-Checked 1 file with TypeScript 5.9.3 in 2845 ms.
+Checked 1 file with TypeScript 5.9.3 in 3507 ms.
+```
+
+### nestjs-core-aws-checkout
+
+PR: https://github.com/aws-samples/sample-multi-region-resilient-microservice-on-aws/pull/212
+
+```
+@nestjs/core 11.2.7 -> 11.2.8
+You import 1 symbol from @nestjs/core. None changed. Behavior not checked.
+
+UNCHANGED (1)
+  NestFactory
+
+Checked 1 file with TypeScript 5.9.3 in 4752 ms.
 ```
