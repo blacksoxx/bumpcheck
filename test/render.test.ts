@@ -18,7 +18,7 @@ describe('renderers', () => {
   it('text leads with the headline and lists breaks with locations', async () => {
     const text = renderText(await analyzeFixture('1.0.0', '2.0.0'));
     expect(text.split('\n')[0]).toBe('demo-lib 1.0.0 -> 2.0.0');
-    expect(text).toContain('7 breaks in 6 symbols');
+    expect(text).toContain('9 breaks in 7 symbols');
     expect(text).toContain('src/main.ts:6:1');
     expect(text).toContain('Behavior not checked');
   });

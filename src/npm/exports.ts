@@ -36,19 +36,36 @@ const TS_EXTENSIONS = new Set<string>([
 ]);
 
 export const NAMESPACE_PREFIX = 'namespace:';
+const MEMBER_SEP = '\u0002';
+const SIG_SEP = '\u0001';
 
 function isModuleLike(sym: ts.Symbol): boolean {
   if (sym.flags & (ts.SymbolFlags.ValueModule | ts.SymbolFlags.NamespaceModule)) return true;
   return (sym.declarations ?? []).some((d) => ts.isSourceFile(d) || ts.isModuleDeclaration(d));
 }
 
-function symbolSignature(checker: ts.TypeChecker, sym: ts.Symbol): string {
+/** Parses a namespace signature back into member -> member signature. */
+export function namespaceMembers(signature: string): Map<string, string> | undefined {
+  if (!signature.startsWith(NAMESPACE_PREFIX)) return undefined;
+  const out = new Map<string, string>();
+  for (const entry of signature.slice(NAMESPACE_PREFIX.length).split(MEMBER_SEP)) {
+    if (!entry) continue;
+    const i = entry.indexOf(SIG_SEP);
+    out.set(i < 0 ? entry : entry.slice(0, i), i < 0 ? '' : entry.slice(i + 1));
+  }
+  return out;
+}
+
+function symbolSignature(checker: ts.TypeChecker, sym: ts.Symbol, depth = 0): string {
   const target = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
   if (isModuleLike(target)) {
-    // A namespace is its member list. Comparing the file text of a module
-    // would flag every internal reshuffle as a change.
-    const names = checker.getExportsOfModule(target).map((e) => e.name).sort();
-    return NAMESPACE_PREFIX + names.join(',');
+    // A namespace is its members and their signatures. Nested namespaces
+    // one level down are listed by name only, to keep this bounded.
+    const members = checker
+      .getExportsOfModule(target)
+      .map((e) => (depth === 0 ? `${e.name}${SIG_SEP}${symbolSignature(checker, e, depth + 1)}` : e.name))
+      .sort();
+    return NAMESPACE_PREFIX + members.join(MEMBER_SEP);
   }
   const decls = target.declarations ?? [];
   if (decls.length === 0) {
@@ -88,7 +105,7 @@ export function getModuleExports(built: BuiltProgram, specifier: string): Module
   const options = program.getCompilerOptions();
   const synthetic = options.allowSyntheticDefaultImports ?? options.esModuleInterop ?? false;
   if (!exports.has('default') && synthetic) {
-    exports.set('default', NAMESPACE_PREFIX + [...exports.keys()].sort().join(','));
+    exports.set('default', symbolSignature(checker, moduleSymbol));
   }
   return { resolved: true, typed: true, exports };
 }

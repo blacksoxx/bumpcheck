@@ -130,17 +130,18 @@ function attribute(
 ): { symbol: string; attribution: Break['attribution'] } | undefined {
   const fromMessage = /has no exported member (?:named )?'([^']+)'/.exec(message);
   if (fromMessage) return { symbol: fromMessage[1]!, attribution: 'message' };
-  if (!locals || locals.size === 0) return undefined;
 
   const { checker } = built;
   const statement = enclosingStatement(findNodeAt(sf, d.start));
 
   // Walk outward from the error. The innermost node that mentions an import
   // binding wins, so `a(x) + b(y)` attributes to the call that failed.
-  for (let node: ts.Node = findNodeAt(sf, d.start); ; node = node.parent) {
-    const viaBinding = findBinding(node, locals);
-    if (viaBinding) return { symbol: viaBinding, attribution: 'binding' };
-    if (node === statement) break;
+  if (locals && locals.size > 0) {
+    for (let node: ts.Node = findNodeAt(sf, d.start); ; node = node.parent) {
+      const viaBinding = findBinding(node, locals);
+      if (viaBinding) return { symbol: viaBinding, attribution: 'binding' };
+      if (node === statement) break;
+    }
   }
 
   // Same walk, but for values whose type is declared under one of the imports.
@@ -229,6 +230,22 @@ export function diffDiagnostics(
 ): Break[] {
   const breaks: Break[] = [];
   const targetsByFile = new Map<string, Map<ts.Symbol, string>>();
+
+  // Files that never import the package still get type-based attribution,
+  // against everything the repo imports from it anywhere.
+  let repoTargets: Map<ts.Symbol, string> | undefined;
+  const allTargets = (): Map<ts.Symbol, string> => {
+    if (repoTargets) return repoTargets;
+    repoTargets = new Map();
+    for (const [file, locals] of scan.localNames) {
+      const sf = built.program.getSourceFile(file);
+      if (!sf) continue;
+      for (const [sym, name] of importTargets(built.checker, sf, locals)) {
+        if (!repoTargets.has(sym)) repoTargets.set(sym, name);
+      }
+    }
+    return repoTargets;
+  };
   const fresh = [...after.entries()].filter(([key]) => !before.has(key)).map(([, v]) => v.diagnostic);
 
   const statementKey = (d: ts.DiagnosticWithLocation): string => {
@@ -244,8 +261,8 @@ export function diffDiagnostics(
     const location: Location = toLocation(repoRoot, sf, { getStart: () => diagnostic.start } as ts.Node);
     const locals = scan.localNames.get(sf.fileName);
     let targets = targetsByFile.get(sf.fileName);
-    if (!targets && locals) {
-      targets = importTargets(built.checker, sf, locals);
+    if (!targets) {
+      targets = locals ? importTargets(built.checker, sf, locals) : allTargets();
       targetsByFile.set(sf.fileName, targets);
     }
     const attributed = attribute(built, overlay, sf, diagnostic, locals, targets, message);

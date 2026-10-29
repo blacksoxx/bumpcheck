@@ -138,6 +138,28 @@ break under your own settings. Without one, bumpcheck uses strict defaults with
   passed around as a value. Those appear under "not analyzed".
 - It does not fix anything, read changelogs, or decide whether to merge.
 
+## Accuracy
+
+[corpus/](corpus/) pins real Dependabot pull requests from public repos at
+their base commit and runs bumpcheck on each bump. A `--oracle` mode then
+installs the new version into the checkout and runs the repo's own `tsc`; the
+new errors it reports are the ground truth.
+
+Results so far, from [corpus/results.md](corpus/results.md):
+
+| bumps | bumpcheck | tsc oracle |
+|---|---|---|
+| 6 bumps that needed no code changes | 0 breaks on each | 0 new errors on each |
+| zod 3.23.8 → 4.6.5 in a 36-file API, merged without CI | 79 breaks | 84 new errors |
+
+The five-error gap is TypeScript's "implicitly has an 'any' type" follow-on
+errors, which bumpcheck folds into the root cause on the same statement. On
+root causes the two lists are identical, file and line.
+
+Seven cases is a start, not a statistic. Add one with a pull request URL and
+a base commit in [corpus/cases.json](corpus/cases.json) and run
+`npx tsx corpus/run.ts --oracle`.
+
 ## Status
 
 Early. npm with TypeScript declarations is the only ecosystem. The report

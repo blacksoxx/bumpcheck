@@ -14,3 +14,6 @@ export declare class Client {
 }
 export declare const VERSION: string;
 export default Client;
+export declare namespace helpers {
+  function a(): void;
+}

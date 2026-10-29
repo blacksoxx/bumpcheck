@@ -88,6 +88,14 @@ async function oracle(repoRoot: string, c: Case): Promise<string> {
   return `tsc: ${fresh.length} new errors (${before.size} before, ${after.size} after)`;
 }
 
+/** A previous --oracle run leaves its error list behind; reuse it. */
+async function cachedOracle(c: Case): Promise<string> {
+  const file = path.join(checkouts, `${c.id}.oracle.txt`);
+  if (!(await exists(file))) return 'not run';
+  const lines = (await readFile(file, 'utf8')).split('\n').filter(Boolean);
+  return `tsc: ${lines.length} new errors (cached)`;
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const useOracle = args.includes('--oracle');
@@ -109,7 +117,7 @@ async function main(): Promise<void> {
     } catch (e) {
       error = e instanceof Error ? e.message.split('\n')[0] : String(e);
     }
-    const verdict = useOracle && repoRoot ? await oracle(repoRoot, c) : 'not run';
+    const verdict = useOracle && repoRoot ? await oracle(repoRoot, c) : await cachedOracle(c);
     if (report) {
       const s = report.summary;
       rows.push(`| ${c.id} | ${c.pkg} ${c.from} → ${c.to} | ${s.importedSymbols} | ${s.breaks} | ${s.removed + s.breaking} | ${s.changed} | ${s.unknown} | ${report.meta.durationMs} | ${c.truth} | ${verdict} |`);

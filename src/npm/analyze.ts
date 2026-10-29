@@ -6,7 +6,7 @@ import { SCHEMA_VERSION } from '../types.js';
 import type { PackageProvider } from '../registry/provider.js';
 import { buildProgram, isInside, loadRepoConfig } from './program.js';
 import { scanImports } from './imports.js';
-import { getModuleExports, NAMESPACE_PREFIX, type ModuleExports } from './exports.js';
+import { getModuleExports, namespaceMembers, type ModuleExports } from './exports.js';
 import { collectDiagnostics, diffDiagnostics } from './diagnostics.js';
 
 export interface AnalyzeOptions {
@@ -22,15 +22,17 @@ export interface AnalyzeOptions {
  * member lists. Everything else is shown as the normalized declaration.
  */
 function describeChange(before: string, after: string): { before: string; after: string } {
-  if (!before.startsWith(NAMESPACE_PREFIX) || !after.startsWith(NAMESPACE_PREFIX)) return { before, after };
-  const a = new Set(before.slice(NAMESPACE_PREFIX.length).split(',').filter(Boolean));
-  const b = new Set(after.slice(NAMESPACE_PREFIX.length).split(',').filter(Boolean));
-  const removed = [...a].filter((n) => !b.has(n));
-  const added = [...b].filter((n) => !a.has(n));
+  const a = namespaceMembers(before);
+  const b = namespaceMembers(after);
+  if (!a || !b) return { before, after };
+  const removed = [...a.keys()].filter((n) => !b.has(n));
+  const added = [...b.keys()].filter((n) => !a.has(n));
+  const changed = [...a.keys()].filter((n) => b.has(n) && a.get(n) !== b.get(n));
   const list = (xs: string[]) => (xs.length > 12 ? xs.slice(0, 12).join(', ') + `, +${xs.length - 12} more` : xs.join(', '));
   const parts = [`namespace with ${b.size} members`];
   if (removed.length) parts.push(`removed: ${list(removed)}`);
   if (added.length) parts.push(`added: ${list(added)}`);
+  if (changed.length) parts.push(`changed: ${list(changed)}`);
   return { before: `namespace with ${a.size} members`, after: parts.join('; ') };
 }
 
